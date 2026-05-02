@@ -45,7 +45,7 @@ export function useWorkspaces() {
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user, activeWorkspace]);
 
   const createWorkspace = async (name: string) => {
     if (!user) return;

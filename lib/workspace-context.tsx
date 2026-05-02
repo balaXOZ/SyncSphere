@@ -60,7 +60,7 @@ export const WorkspaceProvider = ({ children }: { children: React.ReactNode }) =
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user, activeWorkspace]);
 
   const createWorkspace = useCallback(async (name: string) => {
     if (!user) return;
