@@ -1,10 +1,10 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { collection, query, where, onSnapshot, doc, setDoc, getDocs, updateDoc } from "firebase/firestore";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
+import { collection, query, onSnapshot, doc, setDoc, getDocs, updateDoc, where } from "firebase/firestore";
 import { db } from "./firebase";
 import { useAuth } from "./auth-context";
-import { Workspace, Role } from "@/types";
+import type { Workspace, Role } from "@/types";
 import { toast } from "sonner";
 import { generateInviteCode } from "./utils";
 
@@ -35,12 +35,14 @@ export const WorkspaceProvider = ({ children }: { children: React.ReactNode }) =
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
   const [loading, setLoading] = useState(true);
+  const hasSetInitialWorkspace = useRef(false);
 
   useEffect(() => {
     if (!user) {
       setWorkspaces([]);
       setActiveWorkspace(null);
       setLoading(false);
+      hasSetInitialWorkspace.current = false;
       return;
     }
 
@@ -51,16 +53,23 @@ export const WorkspaceProvider = ({ children }: { children: React.ReactNode }) =
         .map(d => ({ ...d.data(), id: d.id } as Workspace))
         .filter(ws => ws.members && ws.members[user.uid]);
       setWorkspaces(all);
-      if (all.length > 0 && !activeWorkspace) {
+
+      // Only auto-select first workspace on initial load
+      if (all.length > 0 && !hasSetInitialWorkspace.current) {
         setActiveWorkspace(all[0]);
+        hasSetInitialWorkspace.current = true;
+      } else if (all.length === 0) {
+        setActiveWorkspace(null);
+        hasSetInitialWorkspace.current = false;
       }
+
       setLoading(false);
     }, () => {
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [user, activeWorkspace]);
+  }, [user]);
 
   const createWorkspace = useCallback(async (name: string) => {
     if (!user) return;
@@ -94,6 +103,7 @@ export const WorkspaceProvider = ({ children }: { children: React.ReactNode }) =
     });
 
     setActiveWorkspace(ws);
+    hasSetInitialWorkspace.current = true;
     toast.success(`Workspace "${name}" created!`);
   }, [user]);
 

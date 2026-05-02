@@ -9,6 +9,18 @@ export default defineConfig({
     globals: true,
     setupFiles: "./tests/setup.ts",
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "json", "html", "lcov"],
+      include: ["lib/**/*.ts", "lib/**/*.tsx", "app/api/**/*.ts"],
+      exclude: ["lib/firebase.ts", "lib/firebase-admin.ts", "**/*.d.ts"],
+      thresholds: {
+        statements: 80,
+        branches: 75,
+        functions: 80,
+        lines: 80,
+      },
+    },
   },
   resolve: {
     alias: {

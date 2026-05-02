@@ -1,25 +1,28 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { collection, query, where, onSnapshot, doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
-import { Workspace } from "@/types";
+import type { Workspace } from "@/types";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
+/** Hook to manage workspaces with real-time Firestore sync */
 export function useWorkspaces() {
   const { user } = useAuth();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const hasSetInitial = useRef(false);
 
   useEffect(() => {
     if (!user) {
       setWorkspaces([]);
       setActiveWorkspace(null);
       setLoading(false);
+      hasSetInitial.current = false;
       return;
     }
 
@@ -29,13 +32,15 @@ export function useWorkspaces() {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const wsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Workspace));
+      const wsData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Workspace));
       setWorkspaces(wsData);
       
-      if (wsData.length > 0 && !activeWorkspace) {
+      if (wsData.length > 0 && !hasSetInitial.current) {
         setActiveWorkspace(wsData[0]);
+        hasSetInitial.current = true;
       } else if (wsData.length === 0) {
         setActiveWorkspace(null);
+        hasSetInitial.current = false;
       }
       setLoading(false);
     }, (error) => {
@@ -45,7 +50,7 @@ export function useWorkspaces() {
     });
 
     return () => unsubscribe();
-  }, [user, activeWorkspace]);
+  }, [user]);
 
   const createWorkspace = async (name: string) => {
     if (!user) return;
@@ -66,6 +71,7 @@ export function useWorkspaces() {
 
       await setDoc(newWsRef, newWorkspace);
       setActiveWorkspace(newWorkspace);
+      hasSetInitial.current = true;
       toast.success("Workspace created successfully!");
       router.push("/dashboard");
     } catch (error) {
