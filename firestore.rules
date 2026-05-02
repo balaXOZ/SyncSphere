@@ -1,0 +1,85 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: Is the user authenticated?
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Helper: Is the user a member of this workspace?
+    function isMember(workspaceId) {
+      return isAuth() && exists(/databases/$(database)/documents/workspaces/$(workspaceId))
+        && request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.members;
+    }
+
+    // Helper: Is the user an admin or owner?
+    function isAdminOrOwner(workspaceId) {
+      let ws = get(/databases/$(database)/documents/workspaces/$(workspaceId));
+      return isAuth() && (
+        ws.data.members[request.auth.uid] == 'Owner' ||
+        ws.data.members[request.auth.uid] == 'Admin'
+      );
+    }
+
+    // USERS
+    match /users/{userId} {
+      allow read: if isAuth();
+      allow write: if isAuth() && request.auth.uid == userId;
+    }
+
+    // WORKSPACES
+    match /workspaces/{workspaceId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update: if isAuth() && (
+        resource.data.ownerId == request.auth.uid ||
+        resource.data.members[request.auth.uid] == 'Admin' ||
+        resource.data.members[request.auth.uid] == 'Owner'
+      );
+      allow delete: if isAuth() && resource.data.ownerId == request.auth.uid;
+    }
+
+    // TASKS
+    match /tasks/{taskId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update: if isAuth() && (
+        resource.data.assigneeId == request.auth.uid ||
+        isAdminOrOwner(resource.data.workspaceId)
+      );
+      allow delete: if isAuth() && isAdminOrOwner(resource.data.workspaceId);
+    }
+
+    // CHANNELS
+    match /channels/{channelId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update, delete: if isAuth();
+    }
+
+    // MESSAGES — immutable once sent (no editing exploits)
+    match /messages/{messageId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      // Only allow updating the 'reactions' field
+      allow update: if isAuth() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']);
+      allow delete: if false;
+    }
+
+    // ACTIVITIES
+    match /activities/{activityId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update, delete: if false;
+    }
+
+    // NOTIFICATIONS
+    match /notifications/{notificationId} {
+      allow read: if isAuth() && resource.data.userId == request.auth.uid;
+      allow create: if isAuth();
+      allow update: if isAuth() && resource.data.userId == request.auth.uid;
+      allow delete: if false;
+    }
+  }
+}
